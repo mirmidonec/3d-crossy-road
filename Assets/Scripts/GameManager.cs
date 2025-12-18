@@ -36,7 +36,6 @@ public class GameManager : MonoBehaviour
 
   void Awake()
   {
-    // Initialise all the starting state.
     NewLevel();
   }
 
@@ -44,23 +43,19 @@ public class GameManager : MonoBehaviour
   {
     gameState = GameState.Ready;
     currentRoadCount = 0;
-    // Reset character position
     characterPos = new Vector2Int(0, -1);
     character.position = new Vector3(0, 0.2f, -1);
     character.GetComponent<Character>().Reset();
 
-    // Reset the score
     score = 0;
     scoreText.text = "0";
 
-    // Remove all terrain
     obstacles.Clear();
     foreach (Transform child in terrainHolder)
     {
       Destroy(child.gameObject);
     }
 
-    // Reset level, and regenerate
     spawnLocation = 0;
     for (int i = 0; i < spawnDistance; i++)
     {
@@ -72,43 +67,35 @@ public class GameManager : MonoBehaviour
 
   private void SpawnObstacle()
   {
-    // Если достигли лимита дорог - спавним только траву
     if (currentRoadCount >= maxRoads)
     {
-      // Create grass with terrain height of 0.2f.
       Grass grass = Instantiate(grassPrefab, terrainHolder);
       obstacles.Add((0.2f, grass.Init(spawnLocation), grass.gameObject));
       grass.gameObject.name = $"{spawnLocation} - Grass";
     }
     else
     {
-      // Спавним дороги с обычной вероятностью
       float roadProbability = Mathf.Lerp(0.5f, 0.9f, spawnLocation / 250f);
 
       if (Random.value < roadProbability)
       {
-        // Create road with terrain height of 0.1f.
         Road road = Instantiate(roadPrefab, terrainHolder);
         obstacles.Add((0.1f, road.Init(spawnLocation), road.gameObject));
         road.gameObject.name = $"{spawnLocation} - Road";
-        currentRoadCount++; // Увеличиваем счетчик дорог
+        currentRoadCount++; 
       }
       else
       {
-        // Create grass with terrain height of 0.2f.
         Grass grass = Instantiate(grassPrefab, terrainHolder);
         obstacles.Add((0.2f, grass.Init(spawnLocation), grass.gameObject));
         grass.gameObject.name = $"{spawnLocation} - Grass";
       }
     }
-
-    // Update to the next free location
     spawnLocation++;
   }
 
   private bool InStartArea(Vector2Int location)
   {
-    // Movement anywhere in the starting region is allowed.
     if ((location.y > -5) && (location.y < 0) && (location.x > -6) && (location.x < 6))
     {
       return true;
@@ -116,14 +103,11 @@ public class GameManager : MonoBehaviour
     return false;
   }
 
-  // Update is called once per frame
   void Update()
   {
-    // Detect arrow key presses.
     if (gameState == GameState.Ready)
     {
       Vector2Int moveDirection = Vector2Int.zero;
-      // Single if/else don't want to move diagonally.
       if (Keyboard.current.upArrowKey.wasPressedThisFrame)
       {
         character.localRotation = Quaternion.identity;
@@ -145,31 +129,24 @@ public class GameManager : MonoBehaviour
         moveDirection.x = 1;
       }
 
-      // If the user wants to move
       if (moveDirection != Vector2Int.zero)
       {
         Vector2Int destination = characterPos + moveDirection;
-        // In the start area there are no obstacles so you can move anywhere.
+
         if (InStartArea(destination) || ((destination.y >= 0) && !obstacles[destination.y].locations.Contains(destination.x)))
         {
-          // Update our character grid coordinate.
           characterPos = destination;
-          // Call coroutine to move the character object.
           StartCoroutine(MoveCharacter());
-          // Update score if necessary.
           if ((destination.y + 1) > score)
           {
             score = destination.y + 1;
             scoreText.text = $"{score}";
           }
         }
-
-        // Spawn new obstacles if necessary
         while (obstacles.Count < (characterPos.y + spawnDistance))
         {
           SpawnObstacle();
 
-          // Destroy old terrain objects as we progress
           int oldIndex = characterPos.y - spawnDistance;
           if ((oldIndex >= 0) && (obstacles[oldIndex].obj != null))
           {
@@ -177,7 +154,6 @@ public class GameManager : MonoBehaviour
           }
         }
 
-        // If we've gone back too far end the game.
         if (characterPos.y < (score - 10))
         {
           character.GetComponent<Character>().Kill(character.transform.position + new Vector3(0, 0.2f, 0.5f));
@@ -185,18 +161,12 @@ public class GameManager : MonoBehaviour
       }
     }
 
-    // Can only use our shortcut to reset the level when we're dead.
     if (gameState == GameState.Dead && Keyboard.current.spaceKey.wasPressedThisFrame)
     {
       NewLevel();
     }
 
-    // Camera follow at (+2, 4, -3)
     Vector3 cameraPosition = new(character.position.x + 2, 4, character.position.z - 3);
-
-    // Limit camera movement in x direction.
-    // Only follow the character as it moves to -3 and +3.
-    // The camera offset is +2 so that's -1 to +5 in the camera x position.
     cameraPosition.x = Mathf.Clamp(cameraPosition.x, -1, 5);
 
     Camera.main.transform.position = cameraPosition;
@@ -207,7 +177,6 @@ public class GameManager : MonoBehaviour
     gameState = GameState.Moving;
     float elapsedTime = 0f;
 
-    // The yHeight changes if we're on grass or road.
     float yHeight = 0.2f;
     if (characterPos.y >= 0)
     {
@@ -221,31 +190,22 @@ public class GameManager : MonoBehaviour
 
     while (elapsedTime < moveDuration)
     {
-      // How far through the animation are we.
       float percent = elapsedTime / moveDuration;
 
-      // Update the character position
       Vector3 newPos = Vector3.Lerp(startPos, endPos, percent);
-      // Make the character jump in an arc
       newPos.y = yHeight + (0.5f * Mathf.Sin(Mathf.PI * percent));
       character.position = newPos;
 
-      // Update the model rotation
       Vector3 rotation = characterModel.localRotation.eulerAngles;
       characterModel.localRotation = Quaternion.Euler(-5f * Mathf.PI * Mathf.Cos(Mathf.PI * percent), rotation.y, rotation.z);
 
-      // Update the elapsed time
       elapsedTime += Time.deltaTime;
 
       yield return null;
     }
 
-    // Ensure we're at the end.
     character.position = endPos;
     characterModel.localRotation = startRotation;
-
-    // Need to check we're still in moving at the end.
-    // If we're dead we don't want to go back to ready.
     if (gameState == GameState.Moving)
     {
       gameState = GameState.Ready;
@@ -254,7 +214,6 @@ public class GameManager : MonoBehaviour
 
   public void PlayerCollision()
   {
-    // When we collide, we'll simply update the game state.
     gameState = GameState.Dead;
   }
 }
